@@ -1,9 +1,10 @@
 use std::{env, error::Error, fs, process};
-use minigrep::search;
+use minigrep::{case_insensitive_search, search};
 
 struct Config {
     query: String,
     file_path: String,
+    ignore_case: bool,
 }
 
 impl Config {
@@ -13,7 +14,9 @@ impl Config {
         }
         let query = args[1].clone();
         let file_path = args[2].clone();
-        Ok(Config { query, file_path })
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
+
+        Ok(Config { query, file_path, ignore_case })
     }
 
     fn print_args(self) -> Self {
@@ -27,17 +30,27 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let config = Config::new(&args)
         .map(|s| s.print_args()).unwrap_or_else(|_err| {
-            println!("Error with parsing");
+            eprintln!("Error with parsing");
             process::exit(1);
         });
 
-    let _ = run(config);
+    if let Err(e) = run(config) {
+        eprintln!("Application Error: {e}");
+        process::exit(1);
+    }
 }
 
 fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.file_path)?;
 
-    for line in search(&config.query, &contents) {
+    let results = if config.ignore_case {
+        case_insensitive_search(&config.query, &contents)
+    }
+    else {
+        search(&config.query, &contents)
+    };
+
+    for line in results {
         println!("{line}");
     }
     Ok(())
